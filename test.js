@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer');
 const express = require("express");
 const routes = require("./router");
 const jsdom = require("jsdom");
+const {faker} = require("@faker-js/faker");
 
 const app = express();
 
@@ -17,22 +18,56 @@ const app = express();
         console.log("listening on port " + process.env.PORT);
     });
     app.use('/api', routes)
-    const page = await browser.newPage();
-    let response;
-    await fetch('http://localhost:8000/api/mail/read/1863b64d375c37fb').then((response) => response.json())
-        .then((data) => response = data);
-    response = new Buffer.from(response, 'base64').toString('ascii');
 
-    const domPage = new jsdom.JSDOM(response);
-    let url = domPage.window.document.querySelector('center > p > a').getAttribute('href');
+    let listEmail;
+    await fetch('http://localhost:8000/api/mail/messages/' + process.env.EMAIL).then((response) => response.json())
+        .then((data) => listEmail = data);
+    let emailCount = listEmail.length
+
+    const page = await browser.newPage();
+    await page.goto('https://app.nuacom.ie/login/');
+    await page.waitForSelector('.login-options.text-center.login-form-div > a');
+    await page.click('.login-options.text-center.login-form-div > a');
+    await page.type('#reset_pass_form .form-control.placeholder-no-fix', process.env.EMAIL);
+    await page.click('#reset_form_submit');
+
+    let newEmailCount = emailCount
+    while (newEmailCount === emailCount) {
+        await fetch('http://localhost:8000/api/mail/messages/' + process.env.EMAIL).then((response) => response.json())
+            .then((data) => listEmail = data);
+        newEmailCount = listEmail.length;
+        await page.waitForTimeout(5000);
+    }
+
+    let response = [];
+
+    for (let i = 0; i < listEmail.length; i++) {
+        await fetch('http://localhost:8000/api/mail/read/' + listEmail[i].id).then((response) => response.json())
+            .then((data) => {
+                if (data.snippet.includes('We have received a request to reset the password associated with this email address')) {
+                    response.push(data)
+                }
+            });
+    }
+
+    let lastMessage = response[0];
+
+    response.forEach((element) => {
+        if (lastMessage.internalDate < element.internalDate) {
+            lastMessage = element
+        }
+    })
+
+    lastMessage = new Buffer.from(lastMessage.payload.body.data, 'base64').toString('ascii');
+    const domPage = new jsdom.JSDOM(lastMessage);
+    let url = domPage.window.document.querySelector('tr > .mcnTextContent > p > a').getAttribute('href');
 
     await page.goto(url);
-    await page.waitForSelector('.note.note-error a');
-    await page.click('.note.note-error a');
-    await page.waitForSelector('#login_form');
-    await page.type('.login-form-div > div:nth-child(1) input', process.env.EMAIL);
-    await page.type('.login-form-div > div:nth-child(2) input', process.env.PASSWORD);
-    await page.click('#login_form .form-actions > button');
+    await page.waitForSelector('[name="newpass"]');
+    let password = faker.internet.password(20, false, /[A-Za-z0-9_!@#$%^&*()]/);
+    await page.type('[name="newpass"]', password);
+    await page.type('[name="confirmpass"]', password);
+    await page.click('.btn.green.col-md-offset-4.btn-submit');
     await page.waitForSelector('.username .hidden-sm.hidden-xs');
 
     await browser.close();

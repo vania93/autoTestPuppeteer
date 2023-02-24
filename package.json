@@ -10,5 +10,8 @@
     "googleapis": "^111.0.0",
     "jsdom": "^21.1.0",
     "puppeteer": "^19.7.0"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^7.6.0"
   }
 }
