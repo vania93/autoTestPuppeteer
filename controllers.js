@@ -13,11 +13,24 @@ oAuth2Client.setCredentials({refresh_token: process.env.REFRESH_TOKEN});
 
 async function readMail(req, res) {
     try {
-        const url = `https://gmail.googleapis.com/gmail/v1/users/${process.env.EMAIL}/messages/${req.params.messageId}?fields=payload.body.data`;
+        const url = `https://gmail.googleapis.com/gmail/v1/users/${process.env.EMAIL}/messages/${req.params.messageId}`;
         const {token} = await oAuth2Client.getAccessToken();
         const config = generateConfig(url, token);
         const response = await axios(config);
-        let data = await response.data.payload.body.data;
+        let data = await response.data;
+        res.json(data);
+    } catch (error) {
+        res.send(error);
+    }
+}
+
+async function getList(req, res) {
+    try {
+        const url = `https://gmail.googleapis.com/gmail/v1/users/${req.params.email}/messages?fields=messages.id`;
+        const {token} = await oAuth2Client.getAccessToken();
+        const config = generateConfig(url, token);
+        const response = await axios(config);
+        let data = await response.data.messages;
         res.json(data);
     } catch (error) {
         res.send(error);
@@ -26,4 +39,5 @@ async function readMail(req, res) {
 
 module.exports = {
     readMail,
+    getList,
 };
